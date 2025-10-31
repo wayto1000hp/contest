@@ -20,6 +20,10 @@ struct Graph {
     vector<vector<int>> adj;
     vector<char> active;
 
+    static inline void trim_inplace(string& s) {
+        s.erase(remove_if(s.begin(), s.end(), [](unsigned char c){ return c==' '||c=='\t'||c=='\r'; }), s.end());
+    }
+
     bool loadFromFile(const string& path) {
         edges.clear(); maxId = 0;
         ifstream in(path);
@@ -28,26 +32,30 @@ struct Graph {
         auto norm = [](int a,int b){ if(a>b) std::swap(a,b); return pair<int,int>(a,b); };
         while (getline(in, line)) {
             if (line.empty()) continue;
-            int u=0, v=0; char comma=0;
-            stringstream ss(line);
-            if (!(ss>>u)) continue;
-            if (!(ss>>comma) || comma!=',') continue;
-            if (!(ss>>v)) continue;
-            if (u<=0 || v<=0) continue;
-            if (u==v) { if (u<=350) maxId = std::max(maxId,u); continue; }
-            if (u>350 || v>350) continue;
-            maxId = std::max(maxId, std::max(u,v));
-            edges.push_back(norm(u,v));
+            trim_inplace(line);
+            if (line.empty()) continue;
+            size_t p = line.find(',');
+            if (p == string::npos) p = line.find('.');
+            if (p == string::npos) continue;
+            string su = line.substr(0, p), sv = line.substr(p + 1);
+            if (su.empty() || sv.empty()) continue;
+            int u = 0, v = 0;
+            try { u = stoi(su); v = stoi(sv); } catch (...) { continue; }
+            if (u <= 0 || v <= 0) continue;
+            if (u == v) { if (u <= 350) maxId = max(maxId, u); continue; }
+            if (u > 350 || v > 350) continue;
+            maxId = max(maxId, max(u, v));
+            edges.push_back(norm(u, v));
         }
         sort(edges.begin(), edges.end());
         edges.erase(unique(edges.begin(), edges.end()), edges.end());
-        adj.assign(maxId+1, {});
-        active.assign(maxId+1, 0);
+        adj.assign(maxId + 1, {});
+        active.assign(maxId + 1, 0);
         for (auto e : edges) {
-            int u=e.first, v=e.second;
+            int u = e.first, v = e.second;
             adj[u].push_back(v);
             adj[v].push_back(u);
-            active[u]=active[v]=1;
+            active[u] = active[v] = 1;
         }
         return true;
     }
@@ -63,10 +71,7 @@ struct Solver {
         if (G.edges.empty()) return true;
         vector<char> in(G.maxId+1, 0);
         for (int v: cover) if (v>=1 && v<=G.maxId) in[v]=1;
-        for (auto e : G.edges) {
-            int u=e.first, v=e.second;
-            if (!(in[u] || in[v])) return false;
-        }
+        for (auto e : G.edges) if (!(in[e.first] || in[e.second])) return false;
         return true;
     }
 
@@ -84,10 +89,7 @@ struct Solver {
         for (auto e : E) {
             if (T.seconds() > timeBudgetSec*0.6) break;
             int u=e.first, v=e.second;
-            if (!matched[u] && !matched[v]) {
-                matched[u]=matched[v]=1;
-                cover.push_back(u); cover.push_back(v);
-            }
+            if (!matched[u] && !matched[v]) { matched[u]=matched[v]=1; cover.push_back(u); cover.push_back(v); }
         }
         sort(cover.begin(), cover.end());
         cover.erase(unique(cover.begin(), cover.end()), cover.end());
@@ -100,22 +102,16 @@ struct Solver {
         auto removeV = [&](int x){
             for (int y: adj[x]) {
                 auto& ly = adj[y];
-                ly.erase(std::remove(ly.begin(), ly.end(), x), ly.end());
+                ly.erase(remove(ly.begin(), ly.end(), x), ly.end());
             }
             adj[x].clear();
         };
-        auto hasEdgesLocal = [&](){
-            for (int v=1; v<=G.maxId; ++v) if (!adj[v].empty()) return true;
-            return false;
-        };
+        auto hasEdgesLocal = [&](){ for (int v=1; v<=G.maxId; ++v) if (!adj[v].empty()) return true; return false; };
         vector<int> cover; cover.reserve(G.maxId);
         while (hasEdgesLocal()) {
             if (T.seconds() > timeBudgetSec*0.6) break;
             int best=-1, bestD=-1;
-            for (int v=1; v<=G.maxId; ++v){
-                int d = (int)adj[v].size();
-                if (d>bestD){ bestD=d; best=v; }
-            }
+            for (int v=1; v<=G.maxId; ++v){ int d=(int)adj[v].size(); if (d>bestD){ bestD=d; best=v; } }
             if (best<=0) break;
             cover.push_back(best);
             removeV(best);
@@ -136,7 +132,7 @@ struct Solver {
 
     void localImprove(vector<int>& cover, const Timer& T) const {
         vector<char> in(G.maxId+1,0);
-        auto rebuild=[&](){ std::fill(in.begin(),in.end(),0); for(int x:cover) in[x]=1; };
+        auto rebuild=[&](){ fill(in.begin(),in.end(),0); for(int x:cover) in[x]=1; };
         rebuild();
         bool improved=true;
         while (improved && T.seconds() < timeBudgetSec*0.95) {
