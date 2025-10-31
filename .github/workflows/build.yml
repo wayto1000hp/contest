@@ -1,0 +1,30 @@
+name: build
+on: [push, workflow_dispatch]
+
+jobs:
+  msvc:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      
+      - uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
+      - name: Build program.exe (MSVC x64 /MT)
+        shell: cmd
+        run: |
+          cl /nologo /O2 /EHsc /std:c++17 /MT src\main.cpp /Fe:program.exe
+          if errorlevel 1 exit /b 1
+          dir program.exe
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: program
+          path: |
+            program.exe
+            src/**
+            run.bat
+            Описание.txt
