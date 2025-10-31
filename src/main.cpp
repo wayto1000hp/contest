@@ -1,30 +1,31 @@
-#include <bits/stdc++.h>
+#include <algorithm>
+#include <chrono>
+#include <fstream>
+#include <iostream>
+#include <sstream>
+#include <string>
+#include <utility>
+#include <vector>
 using namespace std;
 
-// ====== Timer ======
 struct Timer {
     using clock = std::chrono::steady_clock;
     clock::time_point start = clock::now();
-    double seconds() const {
-        return std::chrono::duration<double>(clock::now() - start).count();
-    }
+    double seconds() const { return std::chrono::duration<double>(clock::now() - start).count(); }
 };
 
-// ====== Graph ======
 struct Graph {
-    int maxId = 0;                       // 1..350
-    vector<pair<int,int>> edges;         // уникальные, u!=v
-    vector<vector<int>> adj;             // [0..maxId]
-    vector<char> active;                 // встречалась ли вершина
+    int maxId = 0;
+    vector<pair<int,int>> edges;
+    vector<vector<int>> adj;
+    vector<char> active;
 
     bool loadFromFile(const string& path) {
         edges.clear(); maxId = 0;
         ifstream in(path);
         if (!in) return false;
         string line;
-
-        auto norm = [](int a,int b){ if(a>b) swap(a,b); return pair<int,int>(a,b); };
-
+        auto norm = [](int a,int b){ if(a>b) std::swap(a,b); return pair<int,int>(a,b); };
         while (getline(in, line)) {
             if (line.empty()) continue;
             int u=0, v=0; char comma=0;
@@ -33,19 +34,17 @@ struct Graph {
             if (!(ss>>comma) || comma!=',') continue;
             if (!(ss>>v)) continue;
             if (u<=0 || v<=0) continue;
-
-            if (u==v) { if (u<=350) maxId=max(maxId,u); continue; }
+            if (u==v) { if (u<=350) maxId = std::max(maxId,u); continue; }
             if (u>350 || v>350) continue;
-
-            maxId = max(maxId, max(u,v));
+            maxId = std::max(maxId, std::max(u,v));
             edges.push_back(norm(u,v));
         }
         sort(edges.begin(), edges.end());
         edges.erase(unique(edges.begin(), edges.end()), edges.end());
-
         adj.assign(maxId+1, {});
         active.assign(maxId+1, 0);
-        for (auto [u,v]: edges) {
+        for (auto e : edges) {
+            int u=e.first, v=e.second;
             adj[u].push_back(v);
             adj[v].push_back(u);
             active[u]=active[v]=1;
@@ -55,7 +54,6 @@ struct Graph {
     bool hasEdges() const { return !edges.empty(); }
 };
 
-// ====== Solver ======
 struct Solver {
     const Graph& G;
     double timeBudgetSec;
@@ -65,26 +63,27 @@ struct Solver {
         if (G.edges.empty()) return true;
         vector<char> in(G.maxId+1, 0);
         for (int v: cover) if (v>=1 && v<=G.maxId) in[v]=1;
-        for (auto [u,v] : G.edges)
+        for (auto e : G.edges) {
+            int u=e.first, v=e.second;
             if (!(in[u] || in[v])) return false;
+        }
         return true;
     }
 
     vector<int> twoApproxFromMatching(const Timer& T) const {
-        vector<char> used(G.maxId+1,0);
         vector<pair<int,int>> E = G.edges;
-        vector<int> deg(G.maxId+1);
-        for (int v=1; v<=G.maxId; ++v) deg[v]= (int)G.adj[v].size();
-        sort(E.begin(), E.end(), [&](auto a, auto b){
+        vector<int> deg(G.maxId+1,0);
+        for (int v=1; v<=G.maxId; ++v) deg[v]=(int)G.adj[v].size();
+        sort(E.begin(), E.end(), [&](const pair<int,int>& a, const pair<int,int>& b){
             int da=deg[a.first]+deg[a.second], db=deg[b.first]+deg[b.second];
             if (da!=db) return da>db;
             return a<b;
         });
-
         vector<int> cover;
         vector<char> matched(G.maxId+1,0);
-        for (auto [u,v]: E) {
+        for (auto e : E) {
             if (T.seconds() > timeBudgetSec*0.6) break;
+            int u=e.first, v=e.second;
             if (!matched[u] && !matched[v]) {
                 matched[u]=matched[v]=1;
                 cover.push_back(u); cover.push_back(v);
@@ -100,8 +99,8 @@ struct Solver {
         vector<vector<int>> adj = G.adj;
         auto removeV = [&](int x){
             for (int y: adj[x]) {
-                auto& ly=adj[y];
-                ly.erase(remove(ly.begin(), ly.end(), x), ly.end());
+                auto& ly = adj[y];
+                ly.erase(std::remove(ly.begin(), ly.end(), x), ly.end());
             }
             adj[x].clear();
         };
@@ -137,9 +136,8 @@ struct Solver {
 
     void localImprove(vector<int>& cover, const Timer& T) const {
         vector<char> in(G.maxId+1,0);
-        auto rebuild=[&](){ fill(in.begin(),in.end(),0); for(int x:cover) in[x]=1; };
+        auto rebuild=[&](){ std::fill(in.begin(),in.end(),0); for(int x:cover) in[x]=1; };
         rebuild();
-
         bool improved=true;
         while (improved && T.seconds() < timeBudgetSec*0.95) {
             improved=false;
@@ -149,7 +147,7 @@ struct Solver {
                     if (in[u]) continue;
                     in[v]=0; in[u]=1;
                     bool ok=true;
-                    for (auto [a,b]: G.edges) { if (!(in[a]||in[b])) { ok=false; break; } }
+                    for (auto e: G.edges) { int a=e.first,b=e.second; if (!(in[a]||in[b])) { ok=false; break; } }
                     if (ok) { cover[idx]=u; rebuild(); improved=true; break; }
                     in[u]=0; in[v]=1;
                     if (T.seconds() > timeBudgetSec*0.95) break;
@@ -169,7 +167,6 @@ struct Solver {
     }
 };
 
-
 static const string FIO = "Лузгин Алексей Юрьевич";
 
 static void writeOutput(const vector<int>& cover) {
@@ -182,12 +179,10 @@ static void writeOutput(const vector<int>& cover) {
 int main(){
     ios::sync_with_stdio(false);
     cin.tie(nullptr);
-
     Graph G;
     if (!G.loadFromFile("input.txt")) { writeOutput({}); return 0; }
-
     Timer T;
-    Solver S(G, 2.0);            
+    Solver S(G, 2.0);
     auto ans = S.solve(T);
     sort(ans.begin(), ans.end());
     ans.erase(unique(ans.begin(), ans.end()), ans.end());
